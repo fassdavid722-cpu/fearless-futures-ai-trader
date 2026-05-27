@@ -17,8 +17,9 @@ class FearlessBot:
             symbol=config['SYMBOL'],
             timeframe=config['TIMEFRAME'],
             leverage=config['LEVERAGE'],
-            exchange_key=config['BINANCE_FUTURES_TESTNET_KEY'],
-            exchange_secret=config['BINANCE_FUTURES_TESTNET_SECRET']
+            exchange_key=config['BITGET_API_KEY'],
+            exchange_secret=config['BITGET_SECRET_KEY'],
+            exchange_passphrase=config['BITGET_PASSPHRASE']
         )
         self.ai = AIBrain(api_key=config['GROQ_API_KEY'])
         self.risk = RiskManager(
@@ -129,14 +130,14 @@ Avg Win: {avg_win:.2f}, Avg Loss: {avg_loss:.2f}
 
     def start(self):
         logger.info("Starting Fearless Bot...")
-        self.telegram.send_message("✅ Bot online. Paper trading active.\n/help for commands.")
+        self.telegram.send_message("✅ Bot online. Paper trading active (Bitget).\n/help for commands.")
         
         # Setup Telegram handlers
         @self.telegram.bot.message_handler(commands=['start', 'help'])
         def cmd_help(message):
             if not self.telegram.is_authorized(message.chat.id): return
             txt = """
-🤖 *Fearless Futures Paper Trader*
+🤖 *Fearless Futures Paper Trader (Bitget)*
 Commands:
 /decide – Analyze market & open a trade
 /status – Show current position & balance

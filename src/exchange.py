@@ -6,7 +6,8 @@ from typing import Optional, Dict, List
 logger = logging.getLogger("FearlessFutures.Exchange")
 
 class PaperExchange:
-    def __init__(self, initial_balance=1000, symbol="BTC/USDT", timeframe="5m", leverage=10, exchange_key=None, exchange_secret=None):
+    def __init__(self, initial_balance=1000, symbol="BTC/USDT", timeframe="5m", leverage=10, 
+                 exchange_key=None, exchange_secret=None, exchange_passphrase=None):
         self.balance = initial_balance
         self.position: Optional[Dict] = None
         self.trade_log: List[Dict] = []  # closed trades
@@ -15,13 +16,16 @@ class PaperExchange:
         self.leverage = leverage
         self.exchange_key = exchange_key
         self.exchange_secret = exchange_secret
+        self.exchange_passphrase = exchange_passphrase
 
     def _real_exchange(self):
-        return ccxt.binance({
+        # Using Bitget instead of Binance
+        return ccxt.bitget({
             'apiKey': self.exchange_key,
             'secret': self.exchange_secret,
+            'password': self.exchange_passphrase, # Bitget requires 'password' for passphrase
             'enableRateLimit': True,
-            'options': {'defaultType': 'future'}
+            'options': {'defaultType': 'swap'} # Bitget uses 'swap' for futures
         })
 
     def fetch_ticker(self):
@@ -35,7 +39,7 @@ class PaperExchange:
             return False, "Position already open"
         ticker = self.fetch_ticker()
         entry = ticker['last']
-        fee = entry * qty * 0.0004 * 2  # open + close fee approx
+        fee = entry * qty * 0.0006 * 2  # Bitget fees are slightly different, using 0.06% as approx
         self.balance -= fee
         self.position = {
             "side": side,
@@ -70,7 +74,7 @@ class PaperExchange:
 
         # Close position
         exit_price = price
-        fee = pos['quantity'] * exit_price * 0.0004
+        fee = pos['quantity'] * exit_price * 0.0006
         if pos['side'] == 'long':
             pnl = (exit_price - pos['entry_price']) * pos['quantity'] * self.leverage - fee
         else:
@@ -86,7 +90,7 @@ class PaperExchange:
         if not self.position:
             return False, "No open position"
         pos = self.position
-        fee = pos['quantity'] * price * 0.0004
+        fee = pos['quantity'] * price * 0.0006
         if pos['side'] == 'long':
             pnl = (price - pos['entry_price']) * pos['quantity'] * self.leverage - fee
         else:

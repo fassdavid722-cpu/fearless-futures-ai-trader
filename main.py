@@ -31,14 +31,15 @@ config = {
     "GROQ_API_KEY": os.getenv("GROQ_API_KEY"),
     "TELEGRAM_BOT_TOKEN": os.getenv("TELEGRAM_BOT_TOKEN"),
     "YOUR_CHAT_ID": os.getenv("YOUR_CHAT_ID"),
-    "BINANCE_FUTURES_TESTNET_KEY": os.getenv("BINANCE_FUTURES_TESTNET_KEY"),
-    "BINANCE_FUTURES_TESTNET_SECRET": os.getenv("BINANCE_FUTURES_TESTNET_SECRET")
+    "BITGET_API_KEY": os.getenv("BITGET_API_KEY"),
+    "BITGET_SECRET_KEY": os.getenv("BITGET_SECRET_KEY"),
+    "BITGET_PASSPHRASE": os.getenv("BITGET_PASSPHRASE")
 }
 
 # Check for required environment variables
 required_vars = [
     "GROQ_API_KEY", "TELEGRAM_BOT_TOKEN", "YOUR_CHAT_ID", 
-    "BINANCE_FUTURES_TESTNET_KEY", "BINANCE_FUTURES_TESTNET_SECRET"
+    "BITGET_API_KEY", "BITGET_SECRET_KEY", "BITGET_PASSPHRASE"
 ]
 missing_vars = [var for var in required_vars if not config[var]]
 

@@ -1,11 +1,11 @@
-# Fearless Futures AI Trader 🤖
+# Fearless Futures AI Trader (Bitget Edition) 🤖
 
 An autonomous, aggressive crypto futures paper-trading bot powered by AI. This bot runs 24/7 on free infrastructure, controlled via Telegram, with a fearless AI brain, self-monitoring TP/SL, and a learning memory that feeds its own performance back into every decision.
 
 ## Features 🚀
 
 - **Aggressive AI**: Powered by Groq (Llama 3), forced to call LONG or SHORT every time.
-- **Paper Trading**: Connects to Binance Futures Testnet (no real money) and simulates leveraged positions with TP/SL.
+- **Bitget Integration**: Uses Bitget for market data and simulated execution.
 - **24/7 Monitoring**: Checks open positions every 60 seconds and auto-closes when TP/SL hit.
 - **Telegram Control**: Command-based control via Telegram (/decide, /status, /close, /balance, /history).
 - **Risk Management**: Built-in daily trade limits and drawdown protection.
@@ -18,7 +18,7 @@ fearless-futures-ai-trader/
 ├── src/
 │   ├── ai_brain.py         # AI decision logic via Groq
 │   ├── bot.py              # Main bot orchestration
-│   ├── exchange.py         # Paper exchange simulation
+│   ├── exchange.py         # Bitget exchange interface
 │   ├── risk_manager.py     # Risk and drawdown management
 │   └── telegram_handler.py # Telegram bot interaction
 ├── main.py                 # Entry point
@@ -31,7 +31,7 @@ fearless-futures-ai-trader/
 ### 1. Get Your API Keys
 - **GroqCloud**: Get an API key from [console.groq.com](https://console.groq.com).
 - **Telegram**: Create a bot with [@BotFather](https://t.me/BotFather) and get your token and chat ID.
-- **Binance Testnet**: Generate API keys from [testnet.binancefuture.com](https://testnet.binancefuture.com).
+- **Bitget**: Generate API keys from your Bitget account (ensure you have the Key, Secret, and Passphrase).
 
 ### 2. Install Dependencies
 ```bash
@@ -44,8 +44,9 @@ Create a `.env` file in the root directory:
 GROQ_API_KEY=your_groq_key
 TELEGRAM_BOT_TOKEN=your_telegram_token
 YOUR_CHAT_ID=your_chat_id
-BINANCE_FUTURES_TESTNET_KEY=your_binance_key
-BINANCE_FUTURES_TESTNET_SECRET=your_binance_secret
+BITGET_API_KEY=your_bitget_key
+BITGET_SECRET_KEY=your_bitget_secret
+BITGET_PASSPHRASE=your_bitget_passphrase
 ```
 
 ### 4. Run the Bot
