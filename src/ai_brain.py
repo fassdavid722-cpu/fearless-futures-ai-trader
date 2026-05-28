@@ -12,7 +12,7 @@ Answer ONLY with a JSON object:
 """
 
 class AIBrain:
-    def __init__(self, api_key, model="llama3-70b-8192"):
+    def __init__(self, api_key, model="llama-3.3-70b-versatile"):
         self.client = Groq(api_key=api_key)
         self.model = model
 
