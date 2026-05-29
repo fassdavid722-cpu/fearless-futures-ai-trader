@@ -25,6 +25,7 @@ config = {
     "MAX_DAILY_TRADES": 5,
     "MAX_DRAWDOWN_PCT": 0.50,
     "MONITOR_INTERVAL": 60,
+    "AUTO_TRADE": True,
     "INITIAL_BALANCE": 1000,
     
     # Environment variables

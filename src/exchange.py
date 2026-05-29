@@ -1,5 +1,6 @@
 import ccxt
 import logging
+import pandas as pd
 from datetime import datetime, timezone
 from typing import Optional, Dict, List
 
@@ -19,27 +20,42 @@ class PaperExchange:
         self.exchange_passphrase = exchange_passphrase
 
     def _real_exchange(self):
-        # Using Bitget instead of Binance
         return ccxt.bitget({
             'apiKey': self.exchange_key,
             'secret': self.exchange_secret,
-            'password': self.exchange_passphrase, # Bitget requires 'password' for passphrase
+            'password': self.exchange_passphrase,
             'enableRateLimit': True,
-            'options': {'defaultType': 'swap'} # Bitget uses 'swap' for futures
+            'options': {'defaultType': 'swap'}
         })
 
     def fetch_ticker(self):
         return self._real_exchange().fetch_ticker(self.symbol)
 
-    def fetch_ohlcv(self, limit=20):
-        return self._real_exchange().fetch_ohlcv(self.symbol, self.timeframe, limit=limit)
+    def fetch_ohlcv(self, timeframe, limit=100):
+        ohlcv = self._real_exchange().fetch_ohlcv(self.symbol, timeframe, limit=limit)
+        df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+        return self._add_indicators(df)
+
+    def _add_indicators(self, df):
+        # Add Simple Moving Averages
+        df['sma_20'] = df['close'].rolling(window=20).mean()
+        df['sma_50'] = df['close'].rolling(window=50).mean()
+        
+        # Add RSI
+        delta = df['close'].diff()
+        gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+        rs = gain / loss
+        df['rsi'] = 100 - (100 / (1 + rs))
+        
+        return df
 
     def open_position(self, side, qty, tp, sl):
         if self.position:
             return False, "Position already open"
         ticker = self.fetch_ticker()
         entry = ticker['last']
-        fee = entry * qty * 0.0006 * 2  # Bitget fees are slightly different, using 0.06% as approx
+        fee = entry * qty * 0.0006 * 2
         self.balance -= fee
         self.position = {
             "side": side,
@@ -53,7 +69,6 @@ class PaperExchange:
         return True, f"Opened {side.upper()} {qty:.4f} @ {entry:.2f}, TP:{tp:.2f}, SL:{sl:.2f}"
 
     def check_tp_sl(self, price):
-        """Check if TP/SL hit and close position. Returns (closed, reason, pnl)."""
         if not self.position:
             return False, None, 0.0
         pos = self.position
@@ -64,7 +79,7 @@ class PaperExchange:
                 reason = "SL ❌"
             else:
                 return False, None, 0.0
-        else:  # short
+        else:
             if price <= pos['tp']:
                 reason = "TP ✅"
             elif price >= pos['sl']:
@@ -72,7 +87,6 @@ class PaperExchange:
             else:
                 return False, None, 0.0
 
-        # Close position
         exit_price = price
         fee = pos['quantity'] * exit_price * 0.0006
         if pos['side'] == 'long':
@@ -86,7 +100,6 @@ class PaperExchange:
         return True, reason, pnl
 
     def close_now(self, price):
-        """Force-close at current market price."""
         if not self.position:
             return False, "No open position"
         pos = self.position

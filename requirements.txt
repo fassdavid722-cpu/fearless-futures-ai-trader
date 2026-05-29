@@ -3,3 +3,4 @@ pandas
 groq
 pyTelegramBotAPI
 python-dotenv
+schedule
