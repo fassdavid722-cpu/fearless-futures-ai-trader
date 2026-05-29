@@ -95,7 +95,7 @@ class FearlessBot:
         if success:
             self.risk.trade_count_today += 1
             self.telegram.send_message(
-                f"💎 **QUANT AI TRADE**\n{msg}\nConfidence: {confidence:.1%}\nReason: {decision_data.get('reasoning', 'N/A')}"
+                f"💎 **QUANT AI TRADE ({self.exchange.symbol})**\n{msg}\nConfidence: {confidence:.1%}\nReason: {decision_data.get('reasoning', 'N/A')}"
             )
             self.save_current_state()
         else:
