@@ -8,6 +8,7 @@ from .ai_brain import AIBrain
 from .risk_manager import RiskManager
 from .telegram_handler import TelegramHandler
 from .storage import Storage
+from .news import NewsFetcher
 
 logger = logging.getLogger("FearlessFutures.Bot")
 
@@ -36,6 +37,7 @@ class FearlessBot:
             self.lessons = saved_state.get('lessons', [])
 
         self.ai = AIBrain(api_key=config['GROQ_API_KEY'])
+        self.news_fetcher = NewsFetcher()
         
         peak_balance = saved_state['peak_balance'] if saved_state else initial_balance
         self.risk = RiskManager(
@@ -59,19 +61,13 @@ class FearlessBot:
 
     def save_current_state(self):
         self.storage.save_state(
-            self.exchange.balance,
-            self.exchange.position,
-            self.exchange.trade_log,
-            self.risk.peak_balance,
-            self.lessons
+            self.exchange.balance, self.exchange.position, self.exchange.trade_log, self.risk.peak_balance, self.lessons
         )
 
     def get_learning_context(self):
         last_trades = self.exchange.trade_log[-10:]
-        if not last_trades:
-            return ""
+        if not last_trades: return ""
         wins = [t for t in last_trades if t['pnl'] > 0]
-        losses = [t for t in last_trades if t['pnl'] <= 0]
         win_rate = len(wins)/len(last_trades)*100 if last_trades else 0
         return f"Recent Win Rate: {win_rate:.0f}%"
 
@@ -83,7 +79,7 @@ class FearlessBot:
 
         if confidence < self.min_confidence:
             if not self.auto_trade:
-                self.telegram.send_message(f"🔕 AI confidence {confidence:.1%} < {self.min_confidence:.0%}. No trade.")
+                self.telegram.send_message(f"🔕 Confidence {confidence:.1%} < {self.min_confidence:.0%}. No trade.")
             return
 
         risk_amount = self.exchange.balance * self.risk_per_trade
@@ -99,7 +95,7 @@ class FearlessBot:
         if success:
             self.risk.trade_count_today += 1
             self.telegram.send_message(
-                f"✅ **LEARNING AI TRADE**\n{msg}\nConfidence: {confidence:.1%}\nReason: {decision_data.get('reasoning', 'N/A')}"
+                f"💎 **QUANT AI TRADE**\n{msg}\nConfidence: {confidence:.1%}\nReason: {decision_data.get('reasoning', 'N/A')}"
             )
             self.save_current_state()
         else:
@@ -108,7 +104,7 @@ class FearlessBot:
     def run_decide_cycle(self, silent=False):
         can, reason = self.risk.can_trade(self.exchange.balance)
         if not can:
-            if not silent: self.telegram.send_message(f"⚠️ Trade blocked: {reason}")
+            if not silent: self.telegram.send_message(f"⚠️ Blocked: {reason}")
             return
         if self.exchange.position: return
 
@@ -117,6 +113,8 @@ class FearlessBot:
             price = ticker['last']
             df_5m = self.exchange.fetch_ohlcv('5m', limit=50)
             df_1h = self.exchange.fetch_ohlcv('1h', limit=50)
+            order_book = self.exchange.fetch_order_book()
+            news = self.news_fetcher.fetch_latest_news()
             
             learning_context = self.get_learning_context()
             lessons_str = "\n".join([f"- {l}" for l in self.lessons[-5:]])
@@ -125,8 +123,8 @@ class FearlessBot:
             combined_data += f"5m SMA20/50: {df_5m['sma_20'].iloc[-1]:.2f}/{df_5m['sma_50'].iloc[-1]:.2f}\n"
             
             decision_data = self.ai.get_decision(
-                price, df_5m, self.exchange.balance, False, "5m/1h", 
-                learning_context + "\nIndicators:\n" + combined_data, lessons_str
+                price, df_5m, self.exchange.balance, "5m/1h", 
+                learning_context + "\nIndicators:\n" + combined_data, lessons_str, order_book, news
             )
             
             if not decision_data:
@@ -146,17 +144,11 @@ class FearlessBot:
                     price = ticker['last']
                     closed, reason, pnl = self.exchange.check_tp_sl(price)
                     if closed:
-                        # Trade Reflection - The Learning Part
-                        last_trade = self.exchange.trade_log[-1]
-                        lesson = self.ai.reflect_on_trade(last_trade)
+                        lesson = self.ai.reflect_on_trade(self.exchange.trade_log[-1])
                         self.lessons.append(lesson)
-                        
                         self.risk.update_peak(self.exchange.balance)
-                        self.telegram.send_message(
-                            f"💰 **Position Closed ({reason})**\nPnL: {pnl:.2f} USDT\n\n🧠 **AI Reflection:**\n{lesson}"
-                        )
+                        self.telegram.send_message(f"💰 **Closed ({reason})**\nPnL: {pnl:.2f} USDT\n🧠 **Reflection:** {lesson}")
                         self.save_current_state()
-                
                 schedule.run_pending()
                 time.sleep(self.monitor_interval)
             except Exception as e:
@@ -164,30 +156,25 @@ class FearlessBot:
                 time.sleep(10)
 
     def start(self):
-        logger.info("Starting Learning AI Fearless Bot...")
-        self.telegram.send_message("🧠 **Learning AI Upgrade Active.**\nI will now analyze my own trades and learn from mistakes.\n/help for commands.")
-        
+        logger.info("Starting Quant AI Fearless Bot...")
+        self.telegram.send_message("💎 **Quant AI Upgrade Active.**\nNow monitoring Order Books, News, and Market Sentiment.\n/help for commands.")
         schedule.every(1).hours.do(self.run_decide_cycle, silent=True)
         
         @self.telegram.bot.message_handler(commands=['start', 'help'])
         def cmd_help(message):
             if not self.telegram.is_authorized(message.chat.id): return
-            txt = "🤖 *Fearless Learning AI*\n/decide | /status | /close | /balance | /history | /lessons | /toggle"
-            self.telegram.reply_to(message, txt)
+            self.telegram.reply_to(message, "🤖 *Fearless Quant AI*\n/decide | /status | /close | /balance | /history | /lessons | /toggle")
 
         @self.telegram.bot.message_handler(commands=['lessons'])
         def cmd_lessons(message):
             if not self.telegram.is_authorized(message.chat.id): return
-            if not self.lessons:
-                self.telegram.reply_to(message, "No lessons learned yet.")
-                return
-            txt = "🧠 *Lessons Learned*\n" + "\n".join([f"- {l}" for l in self.lessons[-5:]])
+            txt = "🧠 *Lessons Learned*\n" + "\n".join([f"- {l}" for l in self.lessons[-5:]]) if self.lessons else "No lessons yet."
             self.telegram.send_message(txt)
 
         @self.telegram.bot.message_handler(commands=['decide'])
         def cmd_decide(message):
             if not self.telegram.is_authorized(message.chat.id): return
-            self.telegram.reply_to(message, "🧠 Analyzing market & consulting past lessons...")
+            self.telegram.reply_to(message, "💎 Quant Analysis: Scanning Book, News, and Charts...")
             threading.Thread(target=self.run_decide_cycle).start()
 
         @self.telegram.bot.message_handler(commands=['status'])
@@ -197,7 +184,8 @@ class FearlessBot:
                 ticker = self.exchange.fetch_ticker()
                 curr = ticker['last']
                 df_5m = self.exchange.fetch_ohlcv('5m', limit=2)
-                txt = f"📈 BTC: {curr:.2f} | RSI: {df_5m['rsi'].iloc[-1]:.2f}\nMode: {'Auto' if self.auto_trade else 'Manual'}"
+                book = self.exchange.fetch_order_book()
+                txt = f"📈 BTC: {curr:.2f} | RSI: {df_5m['rsi'].iloc[-1]:.2f}\n⚖️ Book Imbalance: {book['imbalance']:.2%}\nMode: {'Auto' if self.auto_trade else 'Manual'}"
                 if self.exchange.position:
                     pos = self.exchange.position
                     txt += f"\n📊 {pos['side'].upper()} @ {pos['entry_price']:.2f}\nTP: {pos['tp']:.2f} | SL: {pos['sl']:.2f}"
