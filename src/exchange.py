@@ -1,6 +1,7 @@
 import ccxt
 import logging
 import pandas as pd
+import numpy as np
 from datetime import datetime, timezone
 from typing import Optional, Dict, List
 
@@ -11,7 +12,7 @@ class PaperExchange:
                  exchange_key=None, exchange_secret=None, exchange_passphrase=None):
         self.balance = initial_balance
         self.position: Optional[Dict] = None
-        self.trade_log: List[Dict] = []  # closed trades
+        self.trade_log: List[Dict] = []
         self.symbol = symbol
         self.timeframe = timeframe
         self.leverage = leverage
@@ -32,21 +33,31 @@ class PaperExchange:
         return self._real_exchange().fetch_ticker(self.symbol)
 
     def fetch_ohlcv(self, timeframe, limit=100):
-        ohlcv = self._real_exchange().fetch_ohlcv(self.symbol, timeframe, limit=limit)
+        # Fetch more history than requested to ensure indicators have enough data to "warm up"
+        warmup_limit = limit + 50
+        ohlcv = self._real_exchange().fetch_ohlcv(self.symbol, timeframe, limit=warmup_limit)
         df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
-        return self._add_indicators(df)
+        df = self._add_indicators(df)
+        # Return only the requested number of rows, ensuring no NaNs at the end
+        return df.tail(limit).reset_index(drop=True)
 
     def _add_indicators(self, df):
         # Add Simple Moving Averages
         df['sma_20'] = df['close'].rolling(window=20).mean()
         df['sma_50'] = df['close'].rolling(window=50).mean()
         
-        # Add RSI
+        # Add RSI (Relative Strength Index)
         delta = df['close'].diff()
         gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
         loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
         rs = gain / loss
         df['rsi'] = 100 - (100 / (1 + rs))
+        
+        # Replace any remaining NaNs or Infs with neutral values to avoid AI crashes
+        df = df.replace([np.inf, -np.inf], np.nan)
+        df['rsi'] = df['rsi'].fillna(50)
+        df['sma_20'] = df['sma_20'].fillna(df['close'])
+        df['sma_50'] = df['sma_50'].fillna(df['close'])
         
         return df
 
