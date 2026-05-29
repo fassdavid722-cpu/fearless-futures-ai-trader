@@ -9,12 +9,13 @@ class Storage:
         self.file_path = file_path
         os.makedirs(os.path.dirname(file_path), exist_ok=True)
 
-    def save_state(self, balance, position, trade_log, peak_balance):
+    def save_state(self, balance, position, trade_log, peak_balance, lessons=None):
         state = {
             "balance": balance,
             "position": position,
             "trade_log": trade_log,
-            "peak_balance": peak_balance
+            "peak_balance": peak_balance,
+            "lessons": lessons or []
         }
         try:
             with open(self.file_path, 'w') as f:
