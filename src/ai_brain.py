@@ -26,7 +26,7 @@ Output only the one-sentence lesson.
 
 class AIBrain:
     def __init__(self, api_key, model="llama-3.3-70b-versatile"):
-        self.client = Groq(api_key=api_key)
+        self.client = Groq(api_key=api_key, timeout=20.0)
         self.model = model
 
     def get_decision(self, price, ohlcv_df, balance, timeframe, learning_context="", lessons="", order_book=None, news=None):
