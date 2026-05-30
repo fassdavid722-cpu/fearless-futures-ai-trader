@@ -15,7 +15,7 @@ logger = logging.getLogger("FearlessFutures")
 
 # Configuration
 config = {
-    "SYMBOL": "BTC/USDT",
+    "SYMBOLS": ["BTC/USDT", "NEAR/USDT", "ETH/USDT", "SOL/USDT"],
     "TIMEFRAME": "5m",
     "LEVERAGE": 10,
     "RISK_PER_TRADE": 0.01,

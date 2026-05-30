@@ -8,12 +8,11 @@ from typing import Optional, Dict, List
 logger = logging.getLogger("FearlessFutures.Exchange")
 
 class PaperExchange:
-    def __init__(self, initial_balance=1000, symbol="BTC/USDT", timeframe="5m", leverage=10, 
+    def __init__(self, initial_balance=1000, timeframe="5m", leverage=10, 
                  exchange_key=None, exchange_secret=None, exchange_passphrase=None):
         self.balance = initial_balance
         self.position: Optional[Dict] = None
         self.trade_log: List[Dict] = []
-        self.symbol = symbol
         self.timeframe = timeframe
         self.leverage = leverage
         self.exchange_key = exchange_key
@@ -29,31 +28,24 @@ class PaperExchange:
             'options': {'defaultType': 'swap'}
         })
 
-    def fetch_ticker(self):
-        return self._real_exchange().fetch_ticker(self.symbol)
+    def fetch_ticker(self, symbol):
+        return self._real_exchange().fetch_ticker(symbol)
 
-    def fetch_order_book(self, limit=20):
+    def fetch_order_book(self, symbol, limit=20):
         try:
-            book = self._real_exchange().fetch_order_book(self.symbol, limit=limit)
-            bids = book['bids']
-            asks = book['asks']
+            book = self._real_exchange().fetch_order_book(symbol, limit=limit)
+            bids, asks = book['bids'], book['asks']
             bid_vol = sum([b[1] for b in bids])
             ask_vol = sum([a[1] for a in asks])
             imbalance = (bid_vol - ask_vol) / (bid_vol + ask_vol)
-            return {
-                "top_bid": bids[0][0] if bids else None,
-                "top_ask": asks[0][0] if asks else None,
-                "bid_volume": bid_vol,
-                "ask_volume": ask_vol,
-                "imbalance": imbalance
-            }
+            return {"top_bid": bids[0][0], "top_ask": asks[0][0], "bid_volume": bid_vol, "ask_volume": ask_vol, "imbalance": imbalance}
         except Exception as e:
-            logger.error(f"Error fetching order book: {e}")
+            logger.error(f"Error fetching order book for {symbol}: {e}")
             return None
 
-    def fetch_ohlcv(self, timeframe, limit=100):
+    def fetch_ohlcv(self, symbol, timeframe, limit=100):
         warmup_limit = limit + 50
-        ohlcv = self._real_exchange().fetch_ohlcv(self.symbol, timeframe, limit=warmup_limit)
+        ohlcv = self._real_exchange().fetch_ohlcv(symbol, timeframe, limit=warmup_limit)
         df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
         df = self._add_indicators(df)
         return df.tail(limit).reset_index(drop=True)
@@ -72,13 +64,14 @@ class PaperExchange:
         df['sma_50'] = df['sma_50'].fillna(df['close'])
         return df
 
-    def open_position(self, side, qty, tp, sl):
+    def open_position(self, symbol, side, qty, tp, sl):
         if self.position: return False, "Position already open"
-        ticker = self.fetch_ticker()
+        ticker = self.fetch_ticker(symbol)
         entry = ticker['last']
         fee = entry * qty * 0.0006 * 2
         self.balance -= fee
         self.position = {
+            "symbol": symbol,
             "side": side,
             "entry_price": entry,
             "quantity": qty,
@@ -105,7 +98,8 @@ class PaperExchange:
         fee = pos['quantity'] * exit_price * 0.0006
         pnl = (exit_price - pos['entry_price']) * pos['quantity'] * self.leverage - fee if pos['side'] == 'long' else (pos['entry_price'] - exit_price) * pos['quantity'] * self.leverage - fee
         self.balance += pnl
-        self.trade_log.append({**self.position, "exit_price": exit_price, "pnl": pnl, "reason": reason})
+        closed_trade = {**self.position, "exit_price": exit_price, "pnl": pnl, "reason": reason}
+        self.trade_log.append(closed_trade)
         self.position = None
         return True, reason, pnl
 
