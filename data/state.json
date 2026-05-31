@@ -1,7 +1,7 @@
 {
     "balance": 999.8799908718386,
     "position": {
-        "side": "long",
+        "symbol": "BTC/USDT", "side": "long",
         "entry_price": 73623.93,
         "quantity": 0.0013583573547511876,
         "leverage": 10,

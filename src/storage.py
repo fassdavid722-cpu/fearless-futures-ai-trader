@@ -5,9 +5,11 @@ import logging
 logger = logging.getLogger("FearlessFutures.Storage")
 
 class Storage:
-    def __init__(self, file_path="data/state.json"):
-        self.file_path = file_path
-        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+    def __init__(self):
+        # Check for a persistent volume path (common in Railway/Docker), otherwise use local data folder
+        self.data_dir = os.getenv("PERSISTENT_VOLUME_PATH", "data")
+        self.file_path = os.path.join(self.data_dir, "state.json")
+        os.makedirs(self.data_dir, exist_ok=True)
 
     def save_state(self, balance, position, trade_log, peak_balance, lessons=None):
         state = {
