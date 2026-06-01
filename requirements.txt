@@ -1,5 +1,6 @@
 ccxt
 pandas
+numpy
 groq
 pyTelegramBotAPI
 python-dotenv
