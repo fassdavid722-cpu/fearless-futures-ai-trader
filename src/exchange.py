@@ -213,3 +213,11 @@ class PaperExchange:
             "best_trade": round(max(pnls), 4),
             "worst_trade": round(min(pnls), 4)
         }
+
+    def fetch_order_book_raw(self, symbol, limit=30):
+        """Returns raw ccxt order book for LiquidityAnalyzer."""
+        try:
+            return self._get_client().fetch_order_book(symbol, limit=limit)
+        except Exception as e:
+            logger.error(f"Raw order book error ({symbol}): {e}")
+            return {"bids": [], "asks": []}
