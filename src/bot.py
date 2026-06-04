@@ -29,6 +29,8 @@ HELP_TEXT = """
 🧠 TP engine evolved
 
 *Your commands:*
+/ping — Is the bot alive? Quick check
+/alive — Full diagnostics
 /decide — Force a scan right now
 /close — Manually close position
 /toggle — Auto-trade ON/OFF
@@ -88,8 +90,12 @@ class FearlessBot:
         self.symbols        = config['SYMBOLS']
         self.risk_per_trade = config['RISK_PER_TRADE']
         self.min_confidence = config['MIN_CONFIDENCE']
-        self._deciding      = False
+        self._deciding       = False
         self._alerted_spikes = set()   # track which symbols got spike alerts this hour
+        self._startup_time   = datetime.now(timezone.utc)
+        self._last_scan_time = None
+        self._last_trade_time = None
+        self._last_activity_alert = datetime.now(timezone.utc)
 
     # ─── Persistence ─────────────────────────────────────────────────────────────
 
@@ -120,6 +126,7 @@ class FearlessBot:
             return
 
         self._deciding = True
+        self._last_scan_time = datetime.now(timezone.utc)
         try:
             latest_news  = self.news.fetch_latest_news()
             macro_data   = self.macro_fetcher.fetch()
@@ -213,6 +220,8 @@ class FearlessBot:
         )
         if success:
             self.risk.trade_count_today += 1
+            self._last_trade_time = datetime.now(timezone.utc)
+            self._last_activity_alert = datetime.now(timezone.utc)
             adx  = indicators.get('adx', 0)
             dip  = indicators.get('di_plus', 0)
             dim  = indicators.get('di_minus', 0)
@@ -580,6 +589,48 @@ class FearlessBot:
             except Exception as e:
                 self.telegram.send(f"❌ Couldn't fetch liquidity: {e}")
 
+
+        @bot.message_handler(commands=['ping'])
+        @auth
+        def cmd_ping(msg):
+            uptime, last_scan, last_trade, pos_str, risk, tp_s = self._alive_status_text()
+            self.telegram.reply_to(msg,
+                f"✅ *Alive and watching.*\n\n"
+                f"Uptime: `{uptime}`\n"
+                f"Last scan: `{last_scan}` | Last trade: `{last_trade}`\n"
+                f"Balance: `${self.exchange.balance:.2f} USDT`\n"
+                f"{pos_str}\n"
+                f"Auto-trade: `{'ON' if self.auto_trade else 'OFF'}`"
+            )
+
+        @bot.message_handler(commands=['alive'])
+        @auth
+        def cmd_alive(msg):
+            uptime, last_scan, last_trade, pos_str, risk, tp_s = self._alive_status_text()
+            import sys, os
+            mem_mb = 0
+            try:
+                import resource
+                mem_mb = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024
+            except:
+                pass
+            self.telegram.reply_to(msg,
+                f"🩺 *Full Diagnostics*\n\n"
+                f"✅ Status: *Running*\n"
+                f"⏱ Uptime: `{uptime}`\n"
+                f"🔍 Last scan: `{last_scan}`\n"
+                f"💹 Last trade: `{last_trade}`\n"
+                f"📊 Trades today: `{risk['trades_today']}/{risk['max_daily']}`\n"
+                f"💰 Balance: `${self.exchange.balance:.2f} USDT`\n"
+                f"📈 Peak: `${self.risk.peak_balance:.2f}`\n"
+                f"{pos_str}\n\n"
+                f"🧠 TP engine: `v{tp_s['learning_version']}` | `{tp_s['tp_mult']}x ATR`\n"
+                f"Extraction avg: `{tp_s['avg_extraction_pct']:.1f}%` (target 30%)\n"
+                f"Wins learned from: `{tp_s['wins_learned_from']}`\n\n"
+                f"🤖 Auto-trade: `{'ON' if self.auto_trade else 'OFF'}`\n"
+                f"💾 Mem usage: `{mem_mb:.0f} MB`"
+            )
+
         # ── Inline keyboard ────────────────────────────────────────────────────
 
         @bot.callback_query_handler(func=lambda c: True)
@@ -600,14 +651,85 @@ class FearlessBot:
                 "toggle":   lambda: cmd_toggle(m),
                 "settings": lambda: cmd_settings(m),
                 "adaptive": lambda: cmd_adaptive(m),
+                "ping":     lambda: cmd_ping(m),
             }
             if d in dispatch:
                 dispatch[d]()
+
+
+    # ─── Proactive alive check-in ─────────────────────────────────────────────────
+
+    def _uptime_str(self):
+        delta = datetime.now(timezone.utc) - self._startup_time
+        h, rem = divmod(int(delta.total_seconds()), 3600)
+        m = rem // 60
+        if h >= 24:
+            return f"{h//24}d {h%24}h"
+        return f"{h}h {m}m"
+
+    def _alive_status_text(self):
+        uptime   = self._uptime_str()
+        pos      = self.exchange.position
+        risk     = self.risk.get_status()
+        tp_s     = self.adaptive_tp.status()
+
+        last_scan = "Never" if not self._last_scan_time else (
+            f"{int((datetime.now(timezone.utc)-self._last_scan_time).total_seconds()//60)}m ago"
+        )
+        last_trade = "None yet" if not self._last_trade_time else (
+            f"{int((datetime.now(timezone.utc)-self._last_trade_time).total_seconds()//60)}m ago"
+        )
+
+        pos_str = "📭 No position"
+        if pos:
+            try:
+                curr = self.exchange.fetch_ticker(pos['symbol'])['last']
+                unr  = (
+                    (curr - pos['entry_price']) * pos['quantity'] * pos['leverage']
+                    if pos['side'] == 'long'
+                    else (pos['entry_price'] - curr) * pos['quantity'] * pos['leverage']
+                )
+                pos_str = f"📌 {pos['symbol']} {pos['side'].upper()} | `{'+'if unr>0 else ''}{unr:.2f} USDT`"
+            except:
+                pos_str = f"📌 {pos['symbol']} {pos['side'].upper()}"
+
+        return (
+            uptime, last_scan, last_trade, pos_str,
+            risk, tp_s
+        )
+
+    def _send_alive_checkin(self):
+        """
+        Fires every 6 hours IF the bot has been quiet (no trade/alert in last 6h).
+        Keeps user confident the bot is alive during slow markets.
+        """
+        try:
+            hours_since = (datetime.now(timezone.utc) - self._last_activity_alert).total_seconds() / 3600
+            if hours_since < 5.5:
+                return  # Something happened recently, no need to ping
+
+            uptime, last_scan, last_trade, pos_str, risk, tp_s = self._alive_status_text()
+            self.telegram.send(
+                "Still here \u2014 just a quiet market.\n\n"
+                f"Uptime: `{uptime}` | Last scan: `{last_scan}`\n"
+                f"Balance: `${self.exchange.balance:.2f} USDT`\n"
+                f"{pos_str}\n\n"
+                "No setups lately. Watching \u2014 I will alert you the moment something looks good.\n"
+                "Use /status for full details or /decide to force a scan."
+            )
+            self._last_activity_alert = datetime.now(timezone.utc)
+        except Exception as e:
+            logger.error(f"Alive check-in error: {e}")
 
     # ─── Startup ──────────────────────────────────────────────────────────────────
 
     def start(self):
         self._register_handlers()
+
+        # 6-hour alive check-in (fires only if bot was quiet)
+        schedule.every(6).hours.do(
+            lambda: threading.Thread(target=self._send_alive_checkin).start()
+        )
 
         # Hourly scan
         schedule.every(1).hours.do(
