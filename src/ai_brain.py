@@ -47,7 +47,7 @@ class AIBrain:
         self.fallback_model = "gemma2-9b-it"
         self.decision_log = []  # Full AI reasoning history
 
-    def get_decision(self, symbol, price, indicators, balance, order_book=None, news=None, macro=None, lessons=None):
+    def get_decision(self, symbol, price, indicators, balance, order_book=None, news=None, macro=None, lessons=None, liquidity=None):
         news_str = "\n".join([f"• [{n['source']}] {n['title']}" for n in (news or [])]) or "No recent news."
         lessons_str = "\n".join([f"• {l}" for l in (lessons or [])[-7:]]) or "No lessons yet."
         
@@ -58,6 +58,17 @@ class AIBrain:
                 f"({'BUY pressure' if order_book['imbalance'] > 0 else 'SELL pressure'}), "
                 f"Bid Vol: {order_book['bid_volume']:.2f}, Ask Vol: {order_book['ask_volume']:.2f}, "
                 f"Spread: {order_book.get('spread_pct', 0):.4f}%"
+            )
+
+        liq_str = "N/A"
+        if liquidity:
+            walls_bid = ", ".join([f"${w['price']:,.4f}({w['dist_pct']:.2f}%)" for w in liquidity.get('bid_walls', [])[:2]])
+            walls_ask = ", ".join([f"${w['price']:,.4f}({w['dist_pct']:.2f}%)" for w in liquidity.get('ask_walls', [])[:2]])
+            liq_str = (
+                f"Grade: {liquidity.get('liquidity_grade','?')} | Score: {liquidity.get('liquidity_score',0):.2f}\n"
+                f"Slippage est: {liquidity.get('slippage_buy_pct','?')}% | {liquidity.get('imbalance_label','?')}\n"
+                f"Bid Walls (support): {walls_bid or 'None'} | Ask Walls (resistance): {walls_ask or 'None'}\n"
+                f"Trap Warning: {liquidity.get('trap_warning') or 'None detected'}"
             )
 
         macro_str = "N/A"
@@ -87,6 +98,9 @@ Trend: {ind.get('trend', 'N/A')}
 
 [ORDER BOOK]
 {book_str}
+
+[LIQUIDITY ANALYSIS]
+{liq_str}
 
 [LATEST CRYPTO NEWS]
 {news_str}
