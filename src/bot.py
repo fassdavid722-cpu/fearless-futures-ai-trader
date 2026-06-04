@@ -11,6 +11,7 @@ from .telegram_handler import TelegramHandler
 from .storage import Storage
 from .news import NewsFetcher
 from .macro import MacroFetcher
+from .liquidity import LiquidityAnalyzer
 
 logger = logging.getLogger("FearlessFutures.Bot")
 
@@ -62,6 +63,7 @@ class FearlessBot:
             max_daily_trades=config['MAX_DAILY_TRADES'],
             max_drawdown_pct=config['MAX_DRAWDOWN_PCT']
         )
+        self.liquidity_analyzer = LiquidityAnalyzer()
         self.telegram = TelegramHandler(
             token=config['TELEGRAM_BOT_TOKEN'],
             authorized_chat_id=config['YOUR_CHAT_ID']
@@ -132,6 +134,11 @@ class FearlessBot:
                     df = self.exchange.fetch_ohlcv(symbol, '5m', limit=250)
                     indicators = self.exchange.get_latest_indicators(df)
                     order_book = self.exchange.fetch_order_book(symbol)
+                    raw_book = self.exchange.fetch_order_book_raw(symbol)
+                    liquidity = self.liquidity_analyzer.analyze(raw_book, price)
+                    if not liquidity.get('tradeable', True) and liquidity.get('liquidity_score', 1) < 0.3:
+                        logger.info(f"Skipping {symbol} — poor liquidity (score {liquidity.get('liquidity_score',0):.2f})")
+                        continue
 
                     decision = self.ai.get_decision(
                         symbol=symbol,
@@ -141,7 +148,8 @@ class FearlessBot:
                         order_book=order_book,
                         news=latest_news,
                         macro=macro_data,
-                        lessons=lessons_list
+                        lessons=lessons_list,
+                        liquidity=liquidity
                     )
 
                     if decision and decision.get('confidence', 0) >= self.min_confidence:
@@ -412,6 +420,24 @@ class FearlessBot:
                 f"Auto-trade: `{'ON' if self.auto_trade else 'OFF'}`"
             )
             self.telegram.reply_to(msg, text)
+
+
+        @bot.message_handler(commands=['liquidity'])
+        @auth
+        def cmd_liquidity(msg):
+            parts = msg.text.strip().split()
+            symbol = parts[1].upper() if len(parts) > 1 else "BTC/USDT"
+            if "/" not in symbol:
+                symbol += "/USDT"
+            self.telegram.reply_to(msg, f"💧 Analyzing {symbol} liquidity...")
+            try:
+                ticker = self.exchange.fetch_ticker(symbol)
+                price = ticker['last']
+                raw_book = self.exchange.fetch_order_book_raw(symbol, limit=30)
+                analysis = self.liquidity_analyzer.analyze(raw_book, price)
+                self.telegram.send(self.liquidity_analyzer.format_for_telegram(analysis, symbol))
+            except Exception as e:
+                self.telegram.send(f"❌ Error: {e}")
 
         # ── Inline keyboard callbacks ──
 
