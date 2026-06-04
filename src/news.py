@@ -4,31 +4,57 @@ import logging
 logger = logging.getLogger("FearlessFutures.News")
 
 class NewsFetcher:
-    def __init__(self):
-        self.url = "https://min-api.cryptocompare.com/data/v2/news/?lang=EN"
+    """Multi-source crypto + macro news aggregator."""
 
-    def fetch_latest_news(self, limit=5):
-        try:
-            response = requests.get(self.url, timeout=5)
-            data = response.json()
-            # Ensure we are accessing the list correctly
-            news_items = data.get('Data', [])
-            if not isinstance(news_items, list):
-                return []
-                
-            headlines = []
-            # Use a simple loop to avoid slice errors if the list is smaller than limit
-            count = 0
-            for item in news_items:
-                if count >= limit:
-                    break
-                headlines.append({
-                    "title": item.get('title', 'No Title'),
-                    "source": item.get('source', 'Unknown'),
-                    "body": (item.get('body', '')[:100] + "...") if item.get('body') else ""
+    SOURCES = [
+        {
+            "name": "CryptoCompare",
+            "url": "https://min-api.cryptocompare.com/data/v2/news/?lang=EN&sortOrder=latest",
+            "parser": "_parse_cryptocompare"
+        },
+        {
+            "name": "CoinDesk RSS",
+            "url": "https://www.coindesk.com/arc/outboundfeeds/rss/",
+            "parser": "_parse_rss"
+        }
+    ]
+
+    def fetch_latest_news(self, limit=6):
+        headlines = []
+        for source in self.SOURCES:
+            if len(headlines) >= limit:
+                break
+            try:
+                parser = getattr(self, source['parser'])
+                items = parser(source['url'], limit - len(headlines))
+                headlines.extend(items)
+            except Exception as e:
+                logger.warning(f"News fetch failed ({source['name']}): {e}")
+        return headlines[:limit]
+
+    def _parse_cryptocompare(self, url, limit):
+        resp = requests.get(url, timeout=6).json()
+        items = resp.get('Data', [])
+        results = []
+        for item in items[:limit]:
+            results.append({
+                "title": item.get('title', ''),
+                "source": item.get('source_info', {}).get('name', 'CryptoCompare'),
+                "body": (item.get('body', '')[:120] + "...") if item.get('body') else ""
+            })
+        return results
+
+    def _parse_rss(self, url, limit):
+        import xml.etree.ElementTree as ET
+        resp = requests.get(url, timeout=6)
+        root = ET.fromstring(resp.content)
+        results = []
+        for item in root.findall('./channel/item')[:limit]:
+            title = item.findtext('title', '').strip()
+            if title:
+                results.append({
+                    "title": title,
+                    "source": "CoinDesk",
+                    "body": ""
                 })
-                count += 1
-            return headlines
-        except Exception as e:
-            logger.error(f"Error fetching news: {e}")
-            return []
+        return results
