@@ -10,7 +10,7 @@ You analyze multi-timeframe price action, order book depth, on-chain signals, an
 
 Your decision framework:
 1. Macro Environment (Fear & Greed, BTC dominance, global risk sentiment)
-2. Multi-timeframe Technical Analysis (EMA, MACD, RSI, Bollinger Bands, Volume Delta, ATR)
+2. Multi-timeframe Technical Analysis (EMA, MACD, RSI, Bollinger Bands, Volume Delta, ATR, DMI/ADX)
 3. Order Book Microstructure (bid/ask imbalance, liquidity walls)
 4. News Sentiment (crypto-specific + macro headlines)
 5. Historical Lessons (your own performance feedback loop)
@@ -94,7 +94,9 @@ MACD: {ind.get('macd', 'N/A'):.6f} | Signal: {ind.get('macd_signal', 'N/A'):.6f}
 Bollinger Bands: Upper {ind.get('bb_upper', 'N/A'):.4f} | Mid {ind.get('bb_mid', 'N/A'):.4f} | Lower {ind.get('bb_lower', 'N/A'):.4f}
 ATR(14): {ind.get('atr', 'N/A'):.4f}
 Volume Delta (buy/sell pressure): {ind.get('volume_delta', 'N/A'):.4f}
-Trend: {ind.get('trend', 'N/A')}
+Trend (EMA): {ind.get('trend', 'N/A')}
+DMI — ADX: {ind.get('adx', 'N/A'):.2f} | DI+: {ind.get('di_plus', 'N/A'):.2f} | DI-: {ind.get('di_minus', 'N/A'):.2f} | Signal: {ind.get('dmi_signal', 'N/A')}
+  (ADX >25 = trending; DI+ > DI- = bullish momentum; DI- > DI+ = bearish momentum)
 
 [ORDER BOOK]
 {book_str}
