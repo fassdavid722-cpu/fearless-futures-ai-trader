@@ -57,4 +57,7 @@ class TelegramHandler:
             InlineKeyboardButton("⚙️ Settings", callback_data="settings"),
             InlineKeyboardButton("🔄 Auto: ON/OFF", callback_data="toggle"),
         )
+        kb.add(
+            InlineKeyboardButton("🧠 Adaptive TP", callback_data="adaptive"),
+        )
         return kb
