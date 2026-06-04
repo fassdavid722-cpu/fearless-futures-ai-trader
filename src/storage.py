@@ -7,22 +7,24 @@ logger = logging.getLogger("FearlessFutures.Storage")
 
 class Storage:
     def __init__(self):
-        self.data_dir = os.getenv("PERSISTENT_VOLUME_PATH", "data")
+        self.data_dir   = os.getenv("PERSISTENT_VOLUME_PATH", "data")
         self.state_path = os.path.join(self.data_dir, "state.json")
         self.journal_path = os.path.join(self.data_dir, "journal.jsonl")
         os.makedirs(self.data_dir, exist_ok=True)
 
     # ── State persistence ──────────────────────────────────────────────────────
 
-    def save_state(self, balance, position, trade_log, peak_balance, lessons=None, ai_log=None):
+    def save_state(self, balance, position, trade_log, peak_balance,
+                   lessons=None, ai_log=None, adaptive_tp=None):
         state = {
-            "balance": balance,
-            "position": position,
-            "trade_log": trade_log,
+            "balance":      balance,
+            "position":     position,
+            "trade_log":    trade_log,
             "peak_balance": peak_balance,
-            "lessons": lessons or [],
-            "ai_log": ai_log or [],
-            "saved_at": datetime.now(timezone.utc).isoformat()
+            "lessons":      lessons      or [],
+            "ai_log":       ai_log       or [],
+            "adaptive_tp":  adaptive_tp  or {},
+            "saved_at":     datetime.now(timezone.utc).isoformat()
         }
         try:
             with open(self.state_path, 'w') as f:
